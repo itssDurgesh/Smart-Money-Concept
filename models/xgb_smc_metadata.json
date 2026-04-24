@@ -1,0 +1,47 @@
+{
+  "trained_at": "2026-04-20T16:30:01.898522",
+  "n_samples": 12287,
+  "n_features": 14,
+  "feature_columns": [
+    "body_wick_ratio",
+    "candle_direction",
+    "upper_wick_ratio",
+    "lower_wick_ratio",
+    "price_change_pct",
+    "atr",
+    "displacement_flag",
+    "volume_spike",
+    "swing_high",
+    "swing_low",
+    "structure_break",
+    "fvg_size",
+    "rolling_avg_body",
+    "rolling_vol_ratio"
+  ],
+  "classes": [
+    "NoPattern",
+    "BOS",
+    "CHoCH",
+    "OrderBlock",
+    "FVG"
+  ],
+  "accuracy": 0.7754271765663141,
+  "cv_accuracy_mean": 0.7758608687819428,
+  "cv_accuracy_std": 0.005662923291234457,
+  "feature_importance": {
+    "displacement_flag": 0.292218953371048,
+    "structure_break": 0.17129014432430267,
+    "body_wick_ratio": 0.10965561866760254,
+    "price_change_pct": 0.0641065314412117,
+    "swing_high": 0.059980642050504684,
+    "fvg_size": 0.05212116613984108,
+    "swing_low": 0.04825830087065697,
+    "atr": 0.04265613481402397,
+    "candle_direction": 0.04217875003814697,
+    "upper_wick_ratio": 0.04011103883385658,
+    "lower_wick_ratio": 0.040052980184555054,
+    "rolling_avg_body": 0.037369828671216965,
+    "volume_spike": 0.0,
+    "rolling_vol_ratio": 0.0
+  }
+}

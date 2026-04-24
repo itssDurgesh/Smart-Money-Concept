@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style> body { margin:0; padding:0; background: #0B0E14; } #tv { width: 800px; height: 600px; } </style>
+</head>
+<body>
+    <div id="tv"></div>
+    <script>
+        const chart = LightweightCharts.createChart(document.getElementById('tv'), {
+            width: 800, height: 600,
+            layout: { background: { type: 'solid', color: '#0B0E14' }, textColor: '#fff' }
+        });
+        const series = chart.addCandlestickSeries({ upColor: '#00FF9D', downColor: '#FF1E56' });
+        
+        // Use exactly the timestamps returned by the API
+        const candles = [{'id': 986, 'pair': 'EURUSD', 'timeframe': '1H', 'open': '1.17606', 'high': '1.17647', 'low': '1.17578', 'close': '1.17606', 'volume': 0, 'timestamp': '2026-04-20 07:30:00'}, {'id': 987, 'pair': 'EURUSD', 'timeframe': '1H', 'open': '1.17606', 'high': '1.17647', 'low': '1.17578', 'close': '1.17633', 'volume': 0, 'timestamp': '2026-04-20 08:30:00'}, {'id': 988, 'pair': 'EURUSD', 'timeframe': '1H', 'open': '1.17633', 'high': '1.17647', 'low': '1.17606', 'close': '1.17633', 'volume': 0, 'timestamp': '2026-04-20 09:30:00'}, {'id': 989, 'pair': 'EURUSD', 'timeframe': '1H', 'open': '1.17633', 'high': '1.17647', 'low': '1.17509', 'close': '1.17564', 'volume': 0, 'timestamp': '2026-04-20 10:30:00'}, {'id': 990, 'pair': 'EURUSD', 'timeframe': '1H', 'open': '1.17578', 'high': '1.17578', 'low': '1.17550', 'close': '1.17550', 'volume': 0, 'timestamp': '2026-04-20 11:30:00'}];
+        
+        const tvData = [];
+        candles.forEach(c => {
+            const validDateStr = c.timestamp.replace(' ', 'T');
+            const timeVal = Math.floor(new Date(validDateStr).getTime() / 1000);
+            tvData.push({ time: timeVal, open: parseFloat(c.open), high: parseFloat(c.high), low: parseFloat(c.low), close: parseFloat(c.close) });
+        });
+        
+        series.setData(tvData);
+        chart.timeScale().fitContent();
+    </script>
+</body>
+</html>

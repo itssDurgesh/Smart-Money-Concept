@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+    <defs>
+        <!-- Gradients -->
+        <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#1e3a8a"/>
+            <stop offset="100%" stop-color="#3b82f6"/>
+        </linearGradient>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#f8fafc"/>
+            <stop offset="100%" stop-color="#e2e8f0"/>
+        </linearGradient>
+        
+        <!-- Drop Shadow -->
+        <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.1"/>
+        </filter>
+    </defs>
+
+    <!-- Background -->
+    <rect width="800" height="600" fill="url(#bgGrad)"/>
+    <text x="400" y="40" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1e293b" text-anchor="middle">
+        SMC Pattern Detector — ER Diagram
+    </text>
+
+    <!-- TABLE: candles -->
+    <g transform="translate(50, 80)" filter="url(#shadow)">
+        <rect width="280" height="240" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+        <path d="M0 8 a8 8 0 0 1 8 -8 h264 a8 8 0 0 1 8 8 v32 a0 0 0 0 1 0 0 h-280 a0 0 0 0 1 0 0 v-32" fill="url(#headerGrad)"/>
+        <text x="140" y="26" font-family="monospace" font-size="16" font-weight="bold" fill="#ffffff" text-anchor="middle">candles</text>
+        
+        <g font-family="monospace" font-size="13" fill="#334155">
+            <text x="15" y="65"><tspan font-weight="bold" fill="#b91c1c">PK</tspan>  id           <tspan fill="#64748b">BIGINT</tspan></text>
+            <text x="15" y="85">    pair         <tspan fill="#64748b">VARCHAR(10)</tspan></text>
+            <text x="15" y="105">    timeframe    <tspan fill="#64748b">VARCHAR(5)</tspan></text>
+            <text x="15" y="125">    open         <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="145">    high         <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="165">    low          <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="185">    close        <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="205">    volume       <tspan fill="#64748b">BIGINT</tspan></text>
+            <text x="15" y="225">    timestamp    <tspan fill="#64748b">TIMESTAMP</tspan></text>
+        </g>
+    </g>
+
+    <!-- TABLE: patterns -->
+    <g transform="translate(470, 80)" filter="url(#shadow)">
+        <rect width="280" height="190" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+        <path d="M0 8 a8 8 0 0 1 8 -8 h264 a8 8 0 0 1 8 8 v32 a0 0 0 0 1 0 0 h-280 a0 0 0 0 1 0 0 v-32" fill="url(#headerGrad)"/>
+        <text x="140" y="26" font-family="monospace" font-size="16" font-weight="bold" fill="#ffffff" text-anchor="middle">patterns</text>
+        
+        <g font-family="monospace" font-size="13" fill="#334155">
+            <text x="15" y="65"><tspan font-weight="bold" fill="#b91c1c">PK</tspan>  id               <tspan fill="#64748b">BIGINT</tspan></text>
+            <text x="15" y="85"><tspan font-weight="bold" fill="#047857">FK</tspan>  candle_id        <tspan fill="#64748b">BIGINT</tspan></text>
+            <text x="15" y="105">    pattern_type     <tspan fill="#64748b">VARCHAR(20)</tspan></text>
+            <text x="15" y="125">    confidence_score <tspan fill="#64748b">DECIMAL(4,3)</tspan></text>
+            <text x="15" y="145">    timeframe        <tspan fill="#64748b">VARCHAR(5)</tspan></text>
+            <text x="15" y="165">    confirmed        <tspan fill="#64748b">BOOLEAN</tspan></text>
+        </g>
+    </g>
+
+    <!-- TABLE: signals -->
+    <g transform="translate(470, 310)" filter="url(#shadow)">
+        <rect width="280" height="240" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+        <path d="M0 8 a8 8 0 0 1 8 -8 h264 a8 8 0 0 1 8 8 v32 a0 0 0 0 1 0 0 h-280 a0 0 0 0 1 0 0 v-32" fill="url(#headerGrad)"/>
+        <text x="140" y="26" font-family="monospace" font-size="16" font-weight="bold" fill="#ffffff" text-anchor="middle">signals</text>
+        
+        <g font-family="monospace" font-size="13" fill="#334155">
+            <text x="15" y="65"><tspan font-weight="bold" fill="#b91c1c">PK</tspan>  id           <tspan fill="#64748b">BIGINT</tspan></text>
+            <text x="15" y="85"><tspan font-weight="bold" fill="#047857">FK</tspan>  pattern_id   <tspan fill="#64748b">BIGINT</tspan></text>
+            <text x="15" y="105">    direction    <tspan fill="#64748b">ENUM</tspan></text>
+            <text x="15" y="125">    entry_price  <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="145">    stop_loss    <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="165">    take_profit  <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="185">    rr_ratio     <tspan fill="#ca8a04">DECIMAL (Gen)</tspan></text>
+            <text x="15" y="205">    status       <tspan fill="#64748b">ENUM</tspan></text>
+            <text x="15" y="225">    created_at   <tspan fill="#64748b">TIMESTAMP</tspan></text>
+        </g>
+    </g>
+
+    <!-- TABLE: trade_log -->
+    <g transform="translate(50, 360)" filter="url(#shadow)">
+        <rect width="280" height="190" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+        <path d="M0 8 a8 8 0 0 1 8 -8 h264 a8 8 0 0 1 8 8 v32 a0 0 0 0 1 0 0 h-280 a0 0 0 0 1 0 0 v-32" fill="url(#headerGrad)"/>
+        <text x="140" y="26" font-family="monospace" font-size="16" font-weight="bold" fill="#ffffff" text-anchor="middle">trade_log</text>
+        
+        <g font-family="monospace" font-size="13" fill="#334155">
+            <text x="15" y="65"><tspan font-weight="bold" fill="#b91c1c">PK</tspan>  id           <tspan fill="#64748b">BIGINT</tspan></text>
+            <text x="15" y="85"><tspan font-weight="bold" fill="#047857">FK</tspan>  signal_id    <tspan fill="#64748b">BIGINT</tspan></text>
+            <text x="15" y="105">    actual_entry <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="125">    actual_exit  <tspan fill="#64748b">DECIMAL(10,5)</tspan></text>
+            <text x="15" y="145">    pnl          <tspan fill="#64748b">DECIMAL(10,2)</tspan></text>
+            <text x="15" y="165">    pips         <tspan fill="#64748b">DECIMAL(8,2)</tspan></text>
+            <text x="15" y="185">    outcome      <tspan fill="#64748b">VARCHAR(10)</tspan></text>
+        </g>
+    </g>
+
+    <!-- RELATIONSHIPS -->
+    <!-- candles to patterns (1:N) -->
+    <path d="M 330 175 L 470 175" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="4"/>
+    <circle cx="330" cy="175" r="4" fill="#2563eb"/>
+    <path d="M 460 170 L 470 175 L 460 180 Z" fill="#2563eb"/>
+    <text x="400" y="165" font-family="Arial" font-size="12" fill="#2563eb" text-anchor="middle">1 : N</text>
+
+    <!-- patterns to signals (1:N) -->
+    <path d="M 610 270 L 610 310" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="4"/>
+    <circle cx="610" cy="270" r="4" fill="#2563eb"/>
+    <path d="M 605 300 L 610 310 L 615 300 Z" fill="#2563eb"/>
+    <text x="635" y="295" font-family="Arial" font-size="12" fill="#2563eb" text-anchor="middle">1 : N</text>
+
+    <!-- signals to trade_log (1:1/1:N) -->
+    <path d="M 470 430 L 330 430" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="4"/>
+    <circle cx="470" cy="430" r="4" fill="#2563eb"/>
+    <path d="M 340 425 L 330 430 L 340 435 Z" fill="#2563eb"/>
+    <text x="400" y="420" font-family="Arial" font-size="12" fill="#2563eb" text-anchor="middle">1 : 1..N</text>
+
+    <!-- Legend -->
+    <g transform="translate(50, 560)" font-family="Arial" font-size="11" fill="#64748b">
+        <text x="0" y="0">System Architecture ER Diagram | Generated for DBMS Academic Project</text>
+        <rect x="0" y="8" width="10" height="10" fill="#b91c1c"/> <text x="15" y="17">Primary Key (PK)</text>
+        <rect x="120" y="8" width="10" height="10" fill="#047857"/> <text x="135" y="17">Foreign Key (FK)</text>
+        <rect x="240" y="8" width="10" height="10" fill="#ca8a04"/> <text x="255" y="17">Generated Column</text>
+    </g>
+</svg>
