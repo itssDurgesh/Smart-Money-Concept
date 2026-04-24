@@ -222,6 +222,28 @@
 
     <!-- Main Content -->
     <div class="main-wrapper">
+        <!-- TradingView Ticker Tape Widget BEGIN -->
+        <div class="tradingview-widget-container" style="height: 34px; border-bottom: 1px solid var(--border); background: var(--surface);">
+            <div class="tradingview-widget-container__widget"></div>
+            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/tv-widget-ticker-tape.js" async>
+            {
+                "symbols": [
+                    { "proName": "FX_IDC:EURUSD", "title": "EUR/USD" },
+                    { "proName": "OANDA:XAUUSD", "title": "Gold" },
+                    { "proName": "FX_IDC:GBPUSD", "title": "GBP/USD" },
+                    { "proName": "FX_IDC:USDJPY", "title": "USD/JPY" },
+                    { "proName": "BINANCE:BTCUSDT", "title": "Bitcoin" }
+                ],
+                "showSymbolLogo": true,
+                "isTransparent": true,
+                "displayMode": "regular",
+                "colorTheme": "dark",
+                "locale": "en"
+            }
+            </script>
+        </div>
+        <!-- TradingView Ticker Tape Widget END -->
+
         <!-- Header -->
         <header class="header">
             <div class="header-left">
@@ -242,7 +264,7 @@
                     <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Model</div>
                     <div class="mono" style="font-size:11px;color:var(--blue);">XGBoost</div>
                 </div>
-                <button class="btn-sync" onclick="typeof refreshData==='function' && refreshData()">Force Sync</button>
+                <button class="btn-sync" onclick="forceSync(this)">Force Sync</button>
             </div>
         </header>
 
@@ -253,5 +275,24 @@
     </div>
 
     {% block scripts %}{% endblock %}
+    <script>
+        async function forceSync(btn) {
+            const originalText = btn.innerText;
+            btn.innerText = 'SYNCING...';
+            btn.style.opacity = '0.7';
+            btn.disabled = true;
+            
+            try {
+                await fetch('/api/sync', { method: 'POST' });
+                alert('Background Sync Started! The database is fetching new live data and running the ML models. It will take ~1 minute to complete. The dashboard will automatically reflect the changes on the next auto-refresh.');
+            } catch(e) {
+                alert('Failed to start sync');
+            }
+            
+            btn.innerText = originalText;
+            btn.style.opacity = '1';
+            btn.disabled = false;
+        }
+    </script>
 </body>
 </html>

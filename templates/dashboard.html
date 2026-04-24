@@ -1,753 +1,857 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SMC QUANT TERMINAL</title>
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        term_bg: '#000000',
-                        term_panel: '#0B0E14',
-                        term_border: '#1E222D',
-                        term_green: '#00FF9D',
-                        term_red: '#FF1E56',
-                        term_accent: '#2962FF',
-                        term_text: '#D1D4DC',
-                        term_muted: '#787B86',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- TradingView Lightweight Charts -->
-    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
-    
-    <style type="text/tailwindcss">
-        body {
-            background-color: theme('colors.term_bg');
-            color: theme('colors.term_text');
-            font-size: 13px;
-        }
-        /* Strict square aesthetic for Quant vibe */
-        .panel {
-            background-color: theme('colors.term_panel');
-            border: 1px solid theme('colors.term_border');
-        }
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #000;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #2B2F3A;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #434651;
-        }
-        /* Table styles */
-        th, td {
-            padding: 6px 12px;
-            border-bottom: 1px solid theme('colors.term_border');
-            white-space: nowrap;
-        }
-        th {
-            background: rgba(41, 98, 255, 0.05);
-            color: theme('colors.term_muted');
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 10px;
-            letter-spacing: 0.5px;
-        }
-        .blinking {
-            animation: blinker 2s linear infinite;
-        }
-        @keyframes blinker {
-            50% { opacity: 0.3; }
-        }
-    </style>
-</head>
-<body class="antialiased h-screen flex flex-col font-sans overflow-hidden">
+{% extends "_base.html" %}
+{% block title %}XGB-SMC Terminal — Chart{% endblock %}
 
-    <!-- Navbar / Header -->
-    <header class="panel flex justify-between items-center px-4 py-2 shrink-0 border-b-2 border-b-term_border">
-        <div class="flex items-center space-x-6">
-            <div class="flex items-center space-x-2">
-                <div class="w-2 h-2 bg-term_green rounded-full blinking shadow-[0_0_8px_#00FF9D]"></div>
-                <h1 class="text-sm font-bold tracking-widest text-white">XGB-SMC <span class="text-term_muted font-normal text-xs ml-1">v2.1.0</span></h1>
+{% block extra_css %}
+/* Chart Page Layout */
+.chart-layout {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+.chart-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.stats-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--border);
+    flex-shrink: 0;
+}
+.stat-card {
+    background: var(--surface);
+    padding: 10px 14px;
+}
+.stat-label {
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 4px;
+}
+.stat-value {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+}
+.stat-value.green { color: var(--green); }
+
+/* Chart container */
+.chart-wrapper {
+    flex: 1;
+    position: relative;
+    background: var(--surface);
+    margin: 1px;
+    min-height: 300px;
+}
+.chart-watermark {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    z-index: 5;
+    pointer-events: none;
+}
+.chart-watermark h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.08);
+    letter-spacing: 2px;
+}
+.chart-watermark .sub {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: rgba(255,255,255,0.05);
+}
+.ohlc-legend {
+    font-size: 11px;
+    font-family: var(--mono);
+    margin-top: 4px;
+    color: var(--text);
+}
+#chartContainer {
+    width: 100%;
+    height: 100%;
+}
+
+/* Zoom Toolbar */
+.zoom-toolbar {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+.zoom-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(11, 14, 20, 0.85);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+    font-family: var(--mono);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    backdrop-filter: blur(8px);
+}
+.zoom-btn:hover {
+    background: rgba(41, 98, 255, 0.2);
+    border-color: var(--blue);
+    color: #fff;
+}
+.zoom-btn.active {
+    background: rgba(41, 98, 255, 0.3);
+    border-color: var(--blue);
+    color: var(--blue);
+}
+.zoom-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+    margin: 0 2px;
+}
+.zoom-label {
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    padding: 0 4px;
+}
+
+/* Predictions Sidebar */
+.predictions-panel {
+    width: 320px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+.panel-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+.panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+}
+.live-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--green);
+}
+.signals-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+/* Signal Card */
+.signal-card {
+    background: var(--surface-2);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+    position: relative;
+}
+.signal-card:hover {
+    background: var(--surface-3);
+    border-color: var(--border);
+}
+.signal-card.active-signal {
+    border-color: var(--blue);
+    box-shadow: 0 0 12px rgba(41, 98, 255, 0.2);
+    background: rgba(41, 98, 255, 0.06);
+}
+.signal-card .direction-pip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 4px 0 0 4px;
+}
+.signal-card .top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.signal-card .pattern-name {
+    font-weight: 700;
+    font-size: 12px;
+    color: #fff;
+}
+.signal-card .prices {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+}
+.signal-card .price-label {
+    font-size: 8px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.signal-card .price-val { color: #fff; }
+.signal-card .price-val.sl { color: var(--red); }
+.signal-card .price-val.tp { color: var(--green); }
+.signal-card .bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+}
+.signal-card .conf {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+}
+.btn-show {
+    background: rgba(41, 98, 255, 0.12);
+    color: var(--blue);
+    border: none;
+    padding: 3px 10px;
+    font-size: 9px;
+    font-family: var(--mono);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.btn-show:hover { background: var(--blue); color: #fff; }
+{% endblock %}
+
+{% block content %}
+<div class="chart-layout">
+    <!-- Chart Area -->
+    <div class="chart-area">
+        <!-- Stats Strip -->
+        <div class="stats-strip">
+            <div class="stat-card">
+                <div class="stat-label">Processed Candles</div>
+                <div class="stat-value" id="statCandles">--</div>
             </div>
-            
-            <!-- Controls -->
-            <div class="flex space-x-2">
-                <select id="pairSelect" class="bg-term_bg border border-term_border text-white px-3 py-1 font-mono text-xs focus:outline-none focus:border-term_accent hover:border-gray-500 cursor-pointer transition-colors">
-                    <option value="EURUSD">EURUSD</option>
-                    <option value="XAUUSD">XAUUSD</option>
-                    <option value="GBPUSD">GBPUSD</option>
-                </select>
-                
-                <select id="timeframeSelect" class="bg-term_bg border border-term_border text-white px-3 py-1 font-mono text-xs focus:outline-none focus:border-term_accent hover:border-gray-500 cursor-pointer transition-colors">
-                    <option value="1H" selected>1H</option>
-                    <option value="4H">4H</option>
-                    <option value="1D">1D</option>
-                </select>
+            <div class="stat-card">
+                <div class="stat-label">Detected Patterns</div>
+                <div class="stat-value" id="statPatterns">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Confidence</div>
+                <div class="stat-value green" id="statConviction">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Pending Signals</div>
+                <div class="stat-value" id="statPending">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Win Rate</div>
+                <div class="stat-value" id="statWinRate">--</div>
             </div>
         </div>
-        
-        <div class="flex items-center space-x-6 text-xs font-mono">
-            <div class="flex flex-col items-end">
-                <span class="text-term_muted uppercase" style="font-size: 9px;">ML Confidence Threshold</span>
-                <span class="text-white">> 70.0%</span>
+
+        <!-- TradingView Chart -->
+        <div class="chart-wrapper">
+            <div class="chart-watermark">
+                <h2 id="watermark">EURUSD</h2>
+                <div class="sub">XGBoost ML Inference</div>
+                <div class="ohlc-legend" id="ohlcLegend"></div>
             </div>
-            <div class="flex flex-col items-end">
-                <span class="text-term_muted uppercase" style="font-size: 9px;">Model Core</span>
-                <span class="text-term_accent">XGBoost (multi:softprob)</span>
+            <div id="chartContainer"></div>
+            <!-- Zoom Toolbar -->
+            <div class="zoom-toolbar">
+                <button class="zoom-btn" onclick="zoomIn()" title="Zoom In (+)">+</button>
+                <button class="zoom-btn" onclick="zoomOut()" title="Zoom Out (−)">−</button>
+                <div class="zoom-divider"></div>
+                <button class="zoom-btn" onclick="fitAll()" title="Fit All (Home)"><span class="material-icons-round" style="font-size:14px">fit_screen</span></button>
+                <button class="zoom-btn" onclick="goToLatest()" title="Go to Latest (End)"><span class="material-icons-round" style="font-size:14px">last_page</span></button>
+                <div class="zoom-divider"></div>
+                <button class="zoom-btn" onclick="showRange(7)" title="1 Week"><span class="zoom-label">1W</span></button>
+                <button class="zoom-btn" onclick="showRange(30)" title="1 Month"><span class="zoom-label">1M</span></button>
+                <button class="zoom-btn" onclick="showRange(90)" title="3 Months"><span class="zoom-label">3M</span></button>
+                <button class="zoom-btn" onclick="showRange(365)" title="1 Year"><span class="zoom-label">1Y</span></button>
             </div>
-            <button onclick="refreshData()" class="bg-term_accent/10 text-term_accent border border-term_accent/30 hover:bg-term_accent hover:text-white px-4 py-1.5 transition-colors uppercase font-bold text-[10px] tracking-wider">
-                Force Sync
-            </button>
         </div>
-    </header>
-
-    <!-- Main Workspace -->
-    <div class="flex flex-col md:flex-row flex-1 overflow-hidden p-1 gap-1">
-        
-        <!-- Left Panel: Chart & Stats -->
-        <div class="flex flex-col w-full md:w-3/4 gap-1">
-            
-            <!-- Top Stats Strip -->
-            <div class="grid grid-cols-5 gap-1 shrink-0">
-                <div class="panel p-3">
-                    <div class="text-term_muted text-[9px] uppercase tracking-wider mb-1">Processed Candles</div>
-                    <div class="text-xl font-mono text-white" id="statCandles">--</div>
-                </div>
-                <div class="panel p-3">
-                    <div class="text-term_muted text-[9px] uppercase tracking-wider mb-1">Detected Patterns</div>
-                    <div class="text-xl font-mono text-white" id="statPatterns">--</div>
-                </div>
-                <div class="panel p-3 relative overflow-hidden">
-                    <div class="absolute right-0 top-0 bottom-0 w-1 bg-term_green/20"></div>
-                    <div class="text-term_muted text-[9px] uppercase tracking-wider mb-1">Avg Signal Conviction</div>
-                    <div class="text-xl font-mono text-term_green" id="statConviction">--</div>
-                </div>
-                <div class="panel p-3 relative overflow-hidden">
-                    <div class="absolute right-0 top-0 bottom-0 w-1 bg-yellow-500/20"></div>
-                    <div class="text-term_muted text-[9px] uppercase tracking-wider mb-1">Pending Execution</div>
-                    <div class="text-xl font-mono text-yellow-500" id="statPending">--</div>
-                </div>
-                <div class="panel p-3">
-                    <div class="text-term_muted text-[9px] uppercase tracking-wider mb-1">Hist. Win Rate</div>
-                    <div class="text-xl font-mono text-white" id="statWinRate">--</div>
-                </div>
-            </div>
-
-            <!-- TradingView Lightweight Chart -->
-            <div class="panel flex-1 flex flex-col relative w-full h-full min-h-[400px]">
-                <div class="absolute top-3 left-4 z-10 pointer-events-none">
-                    <h2 class="text-2xl font-bold text-white/90 drop-shadow-md" id="watermark">EURUSD</h2>
-                    <span class="text-term_muted text-xs font-mono drop-shadow-md">SMC Pattern ML Inference Engine</span>
-                    <div class="text-[11px] font-mono mt-1 tracking-wide" id="ohlcLegend"></div>
-                </div>
-                
-                <!-- Chart Container -->
-                <div id="chartContainer" class="w-full h-full"></div>
-            </div>
-            
-        </div>
-
-        <!-- Right Terminal Panels -->
-        <div class="flex flex-col w-full md:w-1/4 gap-1 h-full">
-            
-            <!-- Signals Feed (Top Half) -->
-            <div class="panel flex-1 flex flex-col overflow-hidden">
-                <div class="p-2 border-b border-term_border bg-black/20 shrink-0 flex justify-between items-center">
-                    <span class="text-xs uppercase tracking-wider font-bold text-term_muted">Actionable Signals Feed</span>
-                    <span class="text-[10px] bg-term_accent/20 text-term_accent px-1.5 py-0.5 rounded-sm font-mono">Live</span>
-                </div>
-                <div class="overflow-y-auto flex-1 p-1 space-y-1 font-mono" id="signalsList">
-                    <div class="text-center text-term_muted py-10 text-xs">Waiting for model inference...</div>
-                </div>
-            </div>
-
-            <!-- Pattern ML Log (Bottom Half) -->
-            <div class="panel flex-1 flex flex-col overflow-hidden">
-                <div class="p-2 border-b border-term_border bg-black/20 shrink-0">
-                    <span class="text-xs uppercase tracking-wider font-bold text-term_muted">Raw ML Classifications</span>
-                </div>
-                <div class="overflow-y-auto flex-1 p-0">
-                    <table class="w-full text-left font-mono">
-                        <thead class="sticky top-0 bg-term_panel shadow-md">
-                            <tr>
-                                <th>Time</th>
-                                <th>Class</th>
-                                <th class="text-right">Prob.</th>
-                            </tr>
-                        </thead>
-                        <tbody id="patternsTableBody" class="text-xs">
-                            <tr><td colspan="3" class="px-4 py-4 text-center text-term_muted">Loading tensor logs...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            
-        </div>
-        
     </div>
 
-    <!-- Application Logic -->
-    <script>
-        // Global State
-        let currentPair = 'EURUSD';
-        let currentTimeframe = '1H';
-        
-        let chart = null;
-        let candleSeries = null;
-        let volumeSeries = null;
-        let emaSeries = null;
-        let tradeSetupLines = [];
-        let zoneSeries = [];     // For SMC zone bands (FVG/OB)
-        let currentCandles = [];
+    <!-- Predictions Sidebar -->
+    <div class="predictions-panel">
+        <div class="panel-header">
+            <span class="panel-title">ML Predictions</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span class="live-dot pulse"></span>
+                <span style="font-size:10px;font-family:var(--mono);color:var(--green);">Live</span>
+            </div>
+        </div>
+        <div class="signals-list" id="signalsList">
+            <div style="text-align:center;color:var(--muted);padding:40px 0;font-size:11px;">
+                Waiting for model inference...
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-        document.addEventListener('DOMContentLoaded', () => {
-            initTradingViewChart();
-            setupEventListeners();
-            refreshData();
-            
-            // Auto-sync every 15 seconds
-            setInterval(refreshData, 15000);
+{% block scripts %}
+<script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+    // === State ===
+    let currentPair = 'EURUSD';
+    let currentTimeframe = '1H';
+    let chart = null;
+    let candleSeries = null;
+    let emaSeries = null;
+    let rsiSeries = null;
+    let macdFastSeries = null;
+    let macdSlowSeries = null;
+    let macdHistSeries = null;
+    let tradeLines = [];
+    let activeCardId = null;
+    let lastChartState = { pair: null, tf: null, lastTime: 0, length: 0 };
+    let focusTime = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('pair')) {
+            currentPair = params.get('pair');
+            document.getElementById('pairSelect').value = currentPair;
+            document.getElementById('watermark').innerText = currentPair;
+        }
+        if (params.has('tf')) {
+            currentTimeframe = params.get('tf');
+            document.getElementById('timeframeSelect').value = currentTimeframe;
+        }
+        if (params.has('focus')) {
+            focusTime = parseInt(params.get('focus'));
+        }
+
+        initChart();
+        setupControls();
+        refreshData(true);
+        setInterval(() => refreshData(false), 15000);
+    });
+
+    function setupControls() {
+        document.getElementById('pairSelect').addEventListener('change', e => {
+            currentPair = e.target.value;
+            document.getElementById('watermark').innerText = currentPair;
+            activeCardId = null;
+            refreshData(true);
+        });
+        document.getElementById('timeframeSelect').addEventListener('change', e => {
+            currentTimeframe = e.target.value;
+            activeCardId = null;
+            refreshData(true);
         });
 
-        function setupEventListeners() {
-            document.getElementById('pairSelect').addEventListener('change', (e) => {
-                currentPair = e.target.value;
-                document.getElementById('watermark').innerText = currentPair;
-                refreshData();
-            });
+        // Keyboard shortcuts for zoom
+        document.addEventListener('keydown', e => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomIn(); }
+            if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomOut(); }
+            if (e.key === 'Home') { e.preventDefault(); fitAll(); }
+            if (e.key === 'End') { e.preventDefault(); goToLatest(); }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); panLeft(); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); panRight(); }
+        });
+    }
 
-            document.getElementById('timeframeSelect').addEventListener('change', (e) => {
-                currentTimeframe = e.target.value;
-                refreshData();
-            });
-        }
+    function initChart() {
+        const container = document.getElementById('chartContainer');
+        chart = LightweightCharts.createChart(container, {
+            autoSize: true,
+            layout: {
+                background: { type: 'solid', color: '#0B0E14' },
+                textColor: '#787B86',
+                fontSize: 11,
+            },
+            grid: {
+                vertLines: { color: 'rgba(67,70,86,0.15)', style: LightweightCharts.LineStyle.Dotted },
+                horzLines: { color: 'rgba(67,70,86,0.15)', style: LightweightCharts.LineStyle.Dotted },
+            },
+            crosshair: {
+                mode: LightweightCharts.CrosshairMode.Normal,
+                vertLine: { color: '#787B86', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#2962FF' },
+                horzLine: { color: '#787B86', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#2962FF' },
+            },
+            rightPriceScale: {
+                borderColor: 'rgba(67,70,86,0.25)',
+                scaleMargins: { top: 0.05, bottom: 0.35 },
+            },
+            timeScale: {
+                borderColor: 'rgba(67,70,86,0.25)',
+                timeVisible: true,
+                secondsVisible: false,
+                rightOffset: 8,
+                barSpacing: 8,
+                minBarSpacing: 1,
+            },
+            handleScroll: {
+                mouseWheel: true,
+                pressedMouseMove: true,
+                horzTouchDrag: true,
+                vertTouchDrag: true,
+            },
+            handleScale: {
+                mouseWheel: true,
+                pinch: true,
+                axisPressedMouseMove: { time: true, price: true },
+                axisDoubleClickReset: { time: true, price: true },
+            },
+        });
 
-        function initTradingViewChart() {
-            const container = document.getElementById('chartContainer');
-
-            chart = LightweightCharts.createChart(container, {
-                autoSize: true,
-                layout: {
-                    background: { type: 'solid', color: '#0B0E14' },
-                    textColor: '#787B86',
-                    fontSize: 11,
-                },
-                grid: {
-                    vertLines: { color: '#1E222D', style: LightweightCharts.LineStyle.Dotted },
-                    horzLines: { color: '#1E222D', style: LightweightCharts.LineStyle.Dotted },
-                },
-                crosshair: {
-                    mode: LightweightCharts.CrosshairMode.Normal,
-                    vertLine: { color: '#787B86', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#2962FF' },
-                    horzLine: { color: '#787B86', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#2962FF' },
-                },
-                rightPriceScale: {
-                    borderColor: '#1E222D',
-                    autoScale: true,
-                    scaleMargins: { top: 0.1, bottom: 0.25 }, // Leave room for volume at bottom
-                },
-                timeScale: {
-                    borderColor: '#1E222D',
-                    timeVisible: true,
-                    secondsVisible: false,
-                    rightOffset: 8,
-                    fixLeftEdge: false,
-                    barSpacing: 8,
-                },
-            });
-
-            // --- Candlestick Series ---
-            candleSeries = chart.addCandlestickSeries({
-                upColor: '#00FF9D',
-                downColor: '#FF1E56',
-                borderVisible: false,
-                wickUpColor: '#00FF9D',
-                wickDownColor: '#FF1E56',
-            });
-
-            // --- Volume Histogram (overlaid at bottom) ---
-            volumeSeries = chart.addHistogramSeries({
-                priceFormat: { type: 'volume' },
-                priceScaleId: '',  // Overlay on main pane
-                scaleMargins: { top: 0.85, bottom: 0 },
-            });
-
-            // --- 21 EMA Overlay ---
-            emaSeries = chart.addLineSeries({
-                color: '#F7931A',
-                lineWidth: 1,
-                lineStyle: LightweightCharts.LineStyle.Solid,
-                crosshairMarkerVisible: false,
-                priceLineVisible: false,
-                lastValueVisible: false,
-            });
-
-            // --- OHLC Legend (crosshair subscriber) ---
-            const legend = document.getElementById('ohlcLegend');
-            chart.subscribeCrosshairMove((param) => {
-                if (!param || !param.time || !param.seriesPrices) {
-                    legend.innerHTML = '';
-                    return;
-                }
-                const data = param.seriesPrices.get(candleSeries);
-                if (!data) return;
-                const o = data.open.toFixed(5);
-                const h = data.high.toFixed(5);
-                const l = data.low.toFixed(5);
-                const c = data.close.toFixed(5);
-                const color = data.close >= data.open ? '#00FF9D' : '#FF1E56';
-                legend.innerHTML = `<span class="text-term_muted">O</span> <span style="color:${color}">${o}</span>  <span class="text-term_muted">H</span> <span style="color:${color}">${h}</span>  <span class="text-term_muted">L</span> <span style="color:${color}">${l}</span>  <span class="text-term_muted">C</span> <span style="color:${color}">${c}</span>`;
-            });
-        }
-
-        // ==========================================
-        // EMA Calculation
-        // ==========================================
-        function calcEMA(candles, period) {
-            const emaData = [];
-            if (candles.length === 0) return emaData;
-            const k = 2 / (period + 1);
-            let ema = candles[0].close;
-            
-            for (let i = 0; i < candles.length; i++) {
-                ema = candles[i].close * k + ema * (1 - k);
-                emaData.push({ time: candles[i].time, value: ema });
+        candleSeries = chart.addCandlestickSeries({
+            upColor: '#00FF9D',
+            downColor: '#FF1E56',
+            borderVisible: false,
+            wickUpColor: '#00FF9D',
+            wickDownColor: '#FF1E56',
+        });
+        
+        // Dynamically adjust precision based on pair later, but default to 5
+        candleSeries.applyOptions({
+            priceFormat: {
+                type: 'price',
+                precision: 5,
+                minMove: 0.00001,
             }
-            return emaData;
-        }
+        });
 
-        // ==========================================
-        // Data Fetching & Sync
-        // ==========================================
-        async function refreshData() {
-            try {
-                await Promise.all([
-                    fetchStats(),
-                    fetchCandlesAndPatterns(),
-                    fetchSignals()
-                ]);
-            } catch (error) {
-                console.error("Sync Error:", error);
+
+
+        emaSeries = chart.addLineSeries({
+            color: '#F7931A',
+            lineWidth: 1,
+            crosshairMarkerVisible: false,
+            priceLineVisible: false,
+            lastValueVisible: false,
+        });
+
+        // RSI Pane
+        rsiSeries = chart.addLineSeries({
+            color: '#2962FF',
+            lineWidth: 1.5,
+            priceScaleId: 'rsi',
+            priceLineVisible: false,
+            lastValueVisible: false,
+            crosshairMarkerVisible: false,
+        });
+        chart.priceScale('rsi').applyOptions({
+            scaleMargins: { top: 0.7, bottom: 0.18 },
+        });
+
+        // MACD Pane
+        macdFastSeries = chart.addLineSeries({ color: '#2962FF', lineWidth: 1, priceScaleId: 'macd', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        macdSlowSeries = chart.addLineSeries({ color: '#F7931A', lineWidth: 1, priceScaleId: 'macd', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        macdHistSeries = chart.addHistogramSeries({ priceScaleId: 'macd', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        chart.priceScale('macd').applyOptions({
+            scaleMargins: { top: 0.85, bottom: 0.0 },
+        });
+
+        // OHLC legend
+        const legend = document.getElementById('ohlcLegend');
+        chart.subscribeCrosshairMove(param => {
+            if (!param || !param.time || !param.seriesPrices) { legend.innerHTML = ''; return; }
+            const d = param.seriesPrices.get(candleSeries);
+            if (!d) return;
+            const c = d.close >= d.open ? '#00FF9D' : '#FF1E56';
+            legend.innerHTML = `<span style="color:#787B86">O</span> <span style="color:${c}">${d.open.toFixed(5)}</span> &nbsp;<span style="color:#787B86">H</span> <span style="color:${c}">${d.high.toFixed(5)}</span> &nbsp;<span style="color:#787B86">L</span> <span style="color:${c}">${d.low.toFixed(5)}</span> &nbsp;<span style="color:#787B86">C</span> <span style="color:${c}">${d.close.toFixed(5)}</span>`;
+        });
+    }
+
+    // === Zoom & Navigation Helpers ===
+    function zoomIn() {
+        if (!chart) return;
+        const ts = chart.timeScale();
+        const range = ts.getVisibleLogicalRange();
+        if (!range) return;
+        const center = (range.from + range.to) / 2;
+        const halfSpan = (range.to - range.from) / 2 * 0.7; // zoom in by 30%
+        ts.setVisibleLogicalRange({ from: center - halfSpan, to: center + halfSpan });
+    }
+
+    function zoomOut() {
+        if (!chart) return;
+        const ts = chart.timeScale();
+        const range = ts.getVisibleLogicalRange();
+        if (!range) return;
+        const center = (range.from + range.to) / 2;
+        const halfSpan = (range.to - range.from) / 2 * 1.4; // zoom out by 40%
+        ts.setVisibleLogicalRange({ from: center - halfSpan, to: center + halfSpan });
+    }
+
+    function fitAll() {
+        if (!chart) return;
+        chart.timeScale().fitContent();
+    }
+
+    function goToLatest() {
+        if (!chart) return;
+        chart.timeScale().scrollToRealTime();
+    }
+
+    function showRange(days) {
+        if (!chart) return;
+        const ts = chart.timeScale();
+        const range = ts.getVisibleLogicalRange();
+        if (!range) return;
+        // Estimate bars per day based on timeframe
+        let barsPerDay = 24; // 1H default
+        if (currentTimeframe === '4H') barsPerDay = 6;
+        else if (currentTimeframe === '1D') barsPerDay = 1;
+        else if (currentTimeframe === '15M') barsPerDay = 96;
+        const totalBars = days * barsPerDay;
+        ts.setVisibleLogicalRange({ from: range.to - totalBars, to: range.to });
+    }
+
+    function panLeft() {
+        if (!chart) return;
+        const ts = chart.timeScale();
+        const range = ts.getVisibleLogicalRange();
+        if (!range) return;
+        const span = range.to - range.from;
+        const shift = span * 0.2;
+        ts.setVisibleLogicalRange({ from: range.from - shift, to: range.to - shift });
+    }
+
+    function panRight() {
+        if (!chart) return;
+        const ts = chart.timeScale();
+        const range = ts.getVisibleLogicalRange();
+        if (!range) return;
+        const span = range.to - range.from;
+        const shift = span * 0.2;
+        ts.setVisibleLogicalRange({ from: range.from + shift, to: range.to + shift });
+    }
+
+    // === Technical Indicators ===
+    function calcEMA(data, period, key='close') {
+        const out = [];
+        if (!data.length) return out;
+        const k = 2 / (period + 1);
+        let ema = data[0][key];
+        for (let i = 0; i < data.length; i++) {
+            ema = data[i][key] * k + ema * (1 - k);
+            out.push({ time: data[i].time, value: ema });
+        }
+        return out;
+    }
+
+    function calcRSI(data, period=14) {
+        const out = [];
+        if(data.length <= period) return out;
+        let gains = 0, losses = 0;
+        for(let i=1; i<=period; i++) {
+            const change = data[i].close - data[i-1].close;
+            if(change > 0) gains += change; else losses -= change;
+        }
+        let avgGain = gains / period;
+        let avgLoss = losses / period;
+        out.push({ time: data[period].time, value: 100 - (100 / (1 + (avgGain/(avgLoss||1)))) });
+        
+        for(let i=period+1; i<data.length; i++) {
+            const change = data[i].close - data[i-1].close;
+            const gain = change > 0 ? change : 0;
+            const loss = change < 0 ? -change : 0;
+            avgGain = (avgGain * (period - 1) + gain) / period;
+            avgLoss = (avgLoss * (period - 1) + loss) / period;
+            const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+            out.push({ time: data[i].time, value: 100 - (100 / (1 + rs)) });
+        }
+        return out;
+    }
+
+    function calcMACD(data, fast=12, slow=26, signal=9) {
+        const fastEMA = calcEMA(data, fast);
+        const slowEMA = calcEMA(data, slow);
+        const macdLine = [];
+        for(let i=0; i<data.length; i++) {
+            if(i < slow-1) continue;
+            const time = data[i].time;
+            const f = fastEMA.find(e => e.time === time)?.value || 0;
+            const s = slowEMA.find(e => e.time === time)?.value || 0;
+            macdLine.push({ time, value: f - s });
+        }
+        const signalEMA = calcEMA(macdLine, signal, 'value');
+        const hist = [];
+        for(let i=0; i<macdLine.length; i++) {
+            const time = macdLine[i].time;
+            const s = signalEMA.find(e => e.time === time)?.value || 0;
+            const h = macdLine[i].value - s;
+            hist.push({ time, value: h, color: h >= 0 ? 'rgba(0,255,157,0.5)' : 'rgba(255,30,86,0.5)' });
+        }
+        return { macd: macdLine, signal: signalEMA, hist };
+    }
+
+    // === Click-to-Draw ===
+    function showSignalOnChart(idx, entry, sl, tp, direction) {
+        // Clear previous
+        tradeLines.forEach(l => candleSeries.removePriceLine(l));
+        tradeLines = [];
+
+        // Highlight active card
+        document.querySelectorAll('.signal-card').forEach(c => c.classList.remove('active-signal'));
+        const card = document.getElementById('sig-' + idx);
+        if (card) card.classList.add('active-signal');
+
+        if (activeCardId === idx) { activeCardId = null; return; } // Toggle off
+        activeCardId = idx;
+
+        const isLong = direction === 'LONG';
+
+        // Entry line
+        tradeLines.push(candleSeries.createPriceLine({
+            price: entry,
+            color: '#2962FF',
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            axisLabelVisible: true,
+            title: isLong ? 'BUY Entry' : 'SELL Entry',
+        }));
+
+        // SL line
+        tradeLines.push(candleSeries.createPriceLine({
+            price: sl,
+            color: '#FF1E56',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: 'Stop Loss',
+        }));
+
+        // TP line
+        tradeLines.push(candleSeries.createPriceLine({
+            price: tp,
+            color: '#00FF9D',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: 'Take Profit',
+        }));
+    }
+
+    // === Data Fetching ===
+    async function refreshData(fit=false) {
+        await Promise.all([fetchStats(), fetchCandles(fit), fetchSignals()]).catch(console.error);
+    }
+
+    async function fetchStats() {
+        try {
+            const r = await fetch('/api/stats');
+            if (!r.ok) throw 0;
+            const d = await r.json();
+            document.getElementById('statCandles').innerText = (d.total_candles || 0).toLocaleString();
+            document.getElementById('statPatterns').innerText = (d.total_patterns || 0).toLocaleString();
+            document.getElementById('statPending').innerText = d.signals_by_status?.PENDING || 0;
+            document.getElementById('statWinRate').innerText = d.win_rate ? d.win_rate.toFixed(1) + '%' : '0.0%';
+            document.getElementById('statConviction').innerText = d.avg_confidence ? (d.avg_confidence * 100).toFixed(1) + '%' : 'N/A';
+        } catch {
+            document.getElementById('statCandles').innerText = 'N/A';
+            document.getElementById('statPatterns').innerText = 'N/A';
+            document.getElementById('statPending').innerText = 'N/A';
+            document.getElementById('statWinRate').innerText = 'N/A';
+            document.getElementById('statConviction').innerText = 'N/A';
+        }
+    }
+
+    async function fetchCandles(fit) {
+        let candles = [];
+        try {
+            const r = await fetch(`/api/candles?pair=${currentPair}&timeframe=${currentTimeframe}`);
+            if (r.ok) candles = await r.json();
+        } catch {}
+
+        if (candles.length > 0) {
+            updateChart(candles, false, fit);
+        } else {
+            console.warn('[SMC] No candle data returned from API for', currentPair, currentTimeframe);
+        }
+    }
+
+    function updateChart(candles, isDemo, fit) {
+        const tvData = [];
+        candles.forEach(c => {
+            let t = isDemo ? c.time : Math.floor(new Date(c.timestamp.replace(' ','T') + 'Z').getTime() / 1000);
+            if (isNaN(t)) return;
+            if (tvData.length > 0 && t <= tvData[tvData.length-1].time) return;
+            const o = parseFloat(c.open), cl = parseFloat(c.close);
+            tvData.push({ time: t, open: o, high: parseFloat(c.high), low: parseFloat(c.low), close: cl });
+        });
+        if (!tvData.length) return;
+        
+        const lastCandle = tvData[tvData.length-1];
+        if (!fit && lastChartState.pair === currentPair && lastChartState.tf === currentTimeframe 
+            && lastChartState.lastTime === lastCandle.time && lastChartState.length === tvData.length) {
+            // Data hasn't changed, skip setData to preserve user's manual price scaling
+            return;
+        }
+        lastChartState = { pair: currentPair, tf: currentTimeframe, lastTime: lastCandle.time, length: tvData.length };
+
+        const isJpyOrXau = currentPair.includes('JPY') || currentPair.includes('XAU');
+        candleSeries.applyOptions({
+            priceFormat: {
+                type: 'price',
+                precision: isJpyOrXau ? 2 : 5,
+                minMove: isJpyOrXau ? 0.01 : 0.00001,
             }
-        }
+        });
 
-        async function fetchStats() {
-            try {
-                const res = await fetch('/api/stats');
-                if(!res.ok) throw new Error();
-                const data = await res.json();
-                
-                document.getElementById('statCandles').innerText = (data.total_candles || 0).toLocaleString();
-                document.getElementById('statPatterns').innerText = (data.total_patterns || 0).toLocaleString();
-                document.getElementById('statPending').innerText = data.signals_by_status?.PENDING || 0;
-                document.getElementById('statWinRate').innerText = data.win_rate ? data.win_rate.toFixed(1) + '%' : '0.0%';
-                
-            } catch (e) {
-                document.getElementById('statCandles').innerText = "18,492";
-                document.getElementById('statPatterns').innerText = "143";
-                document.getElementById('statPending').innerText = "3";
-                document.getElementById('statWinRate').innerText = "64.2%";
+        candleSeries.setData(tvData);
+        emaSeries.setData(calcEMA(tvData, 21));
+        
+        // Add Indicators
+        rsiSeries.setData(calcRSI(tvData, 14));
+        const macd = calcMACD(tvData, 12, 26, 9);
+        macdFastSeries.setData(macd.macd);
+        macdSlowSeries.setData(macd.signal);
+        macdHistSeries.setData(macd.hist);
+
+        if (focusTime) {
+            const idx = tvData.findIndex(c => c.time === focusTime);
+            if (idx >= 0) {
+                // Focus on the candle with 20 candles padding
+                chart.timeScale().setVisibleLogicalRange({ from: idx - 30, to: idx + 10 });
             }
-            
-            document.getElementById('statConviction').innerText = (83.4 + (Math.random()*4 - 2)).toFixed(1) + '%';
-        }
-
-        async function fetchCandlesAndPatterns() {
-            let candles = [];
-            let patterns = [];
-
-            try {
-                const resC = await fetch(`/api/candles?pair=${currentPair}&timeframe=${currentTimeframe}&limit=200`);
-                if(resC.ok) candles = await resC.json();
-
-                const resP = await fetch(`/api/patterns?pair=${currentPair}&timeframe=${currentTimeframe}&limit=50`);
-                if(resP.ok) patterns = await resP.json();
-                
-                renderPatternsTable(patterns);
-                
-                if(candles.length > 0) {
-                    updateChart(candles, patterns);
-                    return;
-                }
-            } catch (e) {}
-
-            // Fallback: generate demo data
-            if (candles.length === 0) {
-                let basePrice = currentPair === 'XAUUSD' ? 2350.00 : 1.0850;
-                let vol = currentPair === 'XAUUSD' ? 3 : 0.001;
-                let now = Math.floor(Date.now() / 1000);
-                let timeStep = currentTimeframe === '1H' ? 3600 : 900;
-                
-                for(let i=200; i>=0; i--) {
-                    let open = basePrice;
-                    let close = open + (Math.random() - 0.5) * vol;
-                    let high = Math.max(open, close) + Math.random() * (vol/2);
-                    let low = Math.min(open, close) - Math.random() * (vol/2);
-                    
-                    candles.push({
-                        time: now - (i * timeStep),
-                        open: open, high: high, low: low, close: close,
-                        volume: Math.floor(Math.random() * 5000) + 500
-                    });
-                    basePrice = close;
-                }
-                
-                patterns = [];
-                const types = ['BOS', 'CHoCH', 'OrderBlock', 'FVG'];
-                for(let k=0; k<5; k++) {
-                    const idx = Math.floor(Math.random() * 190) + 10;
-                    patterns.push({
-                        pattern_type: types[Math.floor(Math.random()*types.length)],
-                        confidence_score: (0.7 + Math.random()*0.2).toFixed(3),
-                        candle_timestamp: candles[idx].time,
-                        candle_high: candles[idx].high,
-                        candle_low: candles[idx].low,
-                        pair: currentPair
-                    });
-                }
-                
-                renderPatternsTable(patterns);
-                updateChart(candles.map(c => ({
-                    time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume
-                })), patterns, true);
-            }
-        }
-
-        async function fetchSignals() {
-            let signals = [];
-            try {
-                const res = await fetch(`/api/signals?pair=${currentPair}&limit=15`);
-                if(res.ok) signals = await res.json();
-                else throw new Error();
-            } catch (e) {
-                let p = currentPair === 'XAUUSD' ? 2350 : 1.0850;
-                let mul = currentPair === 'XAUUSD' ? 5 : 0.002;
-                signals = [
-                    { direction: 'LONG', pattern_type: 'OrderBlock', entry_price: (p).toFixed(5), stop_loss: (p-mul).toFixed(5), take_profit: (p+mul*2.5).toFixed(5), rr_ratio: '2.50', status: 'PENDING', created_at: new Date().toISOString() },
-                    { direction: 'SHORT', pattern_type: 'CHoCH', entry_price: (p+0.001).toFixed(5), stop_loss: (p+mul+0.001).toFixed(5), take_profit: (p-mul*2+0.001).toFixed(5), rr_ratio: '2.00', status: 'ACTIVE', created_at: new Date(Date.now()-3600000).toISOString() },
-                    { direction: 'LONG', pattern_type: 'BOS', entry_price: (p-mul).toFixed(5), stop_loss: (p-mul*2).toFixed(5), take_profit: (p+mul).toFixed(5), rr_ratio: '2.00', status: 'HIT_TP', created_at: new Date(Date.now()-18600000).toISOString() }
-                ];
-            }
-            renderSignalsList(signals);
-            drawAllTradeSetups(signals);
-        }
-
-        // ==========================================
-        // UI Renderers
-        // ==========================================
-        function renderPatternsTable(patterns) {
-            const tbody = document.getElementById('patternsTableBody');
-            if (!patterns || patterns.length === 0) return;
-
-            tbody.innerHTML = patterns.slice(0, 25).map(p => {
-                const conf = parseFloat(p.confidence_score);
-                const confColor = conf > 0.9 ? 'text-term_green' : (conf > 0.8 ? 'text-term_text' : 'text-yellow-600');
-                
-                let tString = "";
-                if(typeof p.candle_timestamp === 'number') {
-                    const d = new Date(p.candle_timestamp * 1000);
-                    tString = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                } else {
-                    const timeStrs = (p.candle_timestamp || '').split('T');
-                    tString = timeStrs.length > 1 ? timeStrs[1].substring(0, 5) : (p.candle_timestamp || 'N/A').substring(11,16);
-                }
-
-                let clName = p.pattern_type;
-                if(clName === 'OrderBlock') clName = 'OB';
-
-                return `
-                <tr class="hover:bg-term_border/30 transition-colors">
-                    <td class="text-term_muted">${tString}</td>
-                    <td class="font-bold w-full">${clName}</td>
-                    <td class="text-right ${confColor}">${(conf).toFixed(3)}</td>
-                </tr>
-                `;
-            }).join('');
-        }
-
-        function renderSignalsList(signals) {
-            const container = document.getElementById('signalsList');
-            if (!signals || signals.length === 0) return;
-
-            container.innerHTML = signals.map(s => {
-                const isLong = s.direction === 'LONG';
-                const dirColor = isLong ? 'text-term_green border-term_green' : 'text-term_red border-term_red';
-                const bgHover = isLong ? 'hover:bg-term_green/5' : 'hover:bg-term_red/5';
-                
-                const ep = String(s.entry_price).padEnd(8, '0');
-                const sl = String(s.stop_loss).padEnd(8, '0');
-                const tp = String(s.take_profit).padEnd(8, '0');
-
-                let statusBadge = `<span class="text-term_muted">[${s.status}]</span>`;
-                if(s.status === 'PENDING') statusBadge = `<span class="text-yellow-500 animate-pulse">[PEND]</span>`;
-                if(s.status === 'ACTIVE') statusBadge = `<span class="text-term_accent">[ACTV]</span>`;
-                if(s.status === 'HIT_TP') statusBadge = `<span class="text-term_green">[ TP ]</span>`;
-                if(s.status === 'HIT_SL') statusBadge = `<span class="text-term_red">[ SL ]</span>`;
-
-                return `
-                <div class="border border-term_border p-2 cursor-pointer ${bgHover} transition-colors relative">
-                    <div class="absolute left-0 top-0 bottom-0 w-[3px] ${isLong ? 'bg-term_green' : 'bg-term_red'}"></div>
-                    
-                    <div class="flex justify-between items-center pl-1 mb-1">
-                        <div class="flex items-center space-x-2">
-                            <span class="font-bold border pl-1 pr-1 text-[9px] ${dirColor}">${isLong ? 'BUY' : 'SEL'}</span>
-                            <span class="text-white text-xs">${s.pattern_type}</span>
-                        </div>
-                        <div class="text-[10px]">${statusBadge}</div>
-                    </div>
-                    
-                    <div class="flex justify-between pl-1 text-[10px] mt-1 space-x-1">
-                        <div><span class="text-term_muted block" style="font-size:8px">ENTRY</span><span class="text-white">${ep}</span></div>
-                        <div><span class="text-term_muted block" style="font-size:8px">SL</span><span class="text-term_red">${sl}</span></div>
-                        <div><span class="text-term_muted block" style="font-size:8px">TP</span><span class="text-term_green">${tp}</span></div>
-                        <div class="text-right"><span class="text-term_muted block" style="font-size:8px">R:R</span><span class="text-term_accent">${Number(s.rr_ratio).toFixed(1)}</span></div>
-                    </div>
-                </div>
-                `;
-            }).join('');
-        }
-
-        // ==========================================
-        // Trade Setup Visualization (ALL signals on chart)
-        // ==========================================
-        function drawAllTradeSetups(signals) {
-            if(!candleSeries) return;
-            // Clear old lines
-            tradeSetupLines.forEach(l => candleSeries.removePriceLine(l));
-            tradeSetupLines = [];
-            
-            // Draw all PENDING + ACTIVE signals on chart
-            const activeSignals = signals.filter(s => s.status === 'PENDING' || s.status === 'ACTIVE');
-            
-            activeSignals.forEach(sig => {
-                const isLong = sig.direction === 'LONG';
-                
-                // Entry line
-                tradeSetupLines.push(candleSeries.createPriceLine({
-                    price: parseFloat(sig.entry_price),
-                    color: '#2962FF',
-                    lineWidth: 1,
-                    lineStyle: LightweightCharts.LineStyle.Solid,
-                    axisLabelVisible: true,
-                    title: `${isLong ? 'BUY' : 'SELL'} Entry`,
-                }));
-                
-                // Stop Loss
-                tradeSetupLines.push(candleSeries.createPriceLine({
-                    price: parseFloat(sig.stop_loss),
-                    color: '#FF1E56',
-                    lineWidth: 1,
-                    lineStyle: LightweightCharts.LineStyle.Dashed,
-                    axisLabelVisible: true,
-                    title: 'SL',
-                }));
-                
-                // Take Profit
-                tradeSetupLines.push(candleSeries.createPriceLine({
-                    price: parseFloat(sig.take_profit),
-                    color: '#00FF9D',
-                    lineWidth: 1,
-                    lineStyle: LightweightCharts.LineStyle.Dashed,
-                    axisLabelVisible: true,
-                    title: 'TP',
-                }));
-            });
-        }
-
-        // ==========================================
-        // Chart Renderer
-        // ==========================================
-        function updateChart(candles, patterns, isDemo = false) {
-            if(!candleSeries) return;
-            currentCandles = candles;
-
-            // 1. Process Candle Data for TV format
-            const tvData = [];
-            const volData = [];
-            candles.forEach(c => {
-                let timeVal;
-                if(isDemo) {
-                    timeVal = c.time;
-                } else {
-                    const validDateStr = c.timestamp.replace(' ', 'T');
-                    timeVal = Math.floor(new Date(validDateStr).getTime() / 1000);
-                }
-
-                if(tvData.length > 0 && timeVal <= tvData[tvData.length-1].time) return;
-                if (isNaN(timeVal)) return;
-                
-                const openVal = parseFloat(c.open);
-                const closeVal = parseFloat(c.close);
-                
-                tvData.push({
-                    time: timeVal,
-                    open: openVal,
-                    high: parseFloat(c.high),
-                    low: parseFloat(c.low),
-                    close: closeVal
-                });
-                
-                // Volume data
-                volData.push({
-                    time: timeVal,
-                    value: parseInt(c.volume) || Math.floor(Math.random() * 3000) + 500,
-                    color: closeVal >= openVal ? 'rgba(0,255,157,0.15)' : 'rgba(255,30,86,0.15)',
-                });
-            });
-            
-            // Set chart data
-            try {
-                if(tvData.length === 0) throw new Error("Empty candle data");
-                candleSeries.setData(tvData);
-                volumeSeries.setData(volData);
-                
-                // 21 EMA overlay
-                const emaData = calcEMA(tvData, 21);
-                emaSeries.setData(emaData);
-                
-            } catch(e) {
-                console.error("Chart Error:", e);
-                return;
-            }
-
-            // 2. Clear old zone series
-            zoneSeries.forEach(s => chart.removeSeries(s));
-            zoneSeries = [];
-
-            // 3. Draw SMC Zones on chart (FVG/OB as shaded bands)
-            // Group by type and only show top patterns by confidence
-            const topPatterns = [...patterns]
-                .sort((a,b) => parseFloat(b.confidence_score) - parseFloat(a.confidence_score))
-                .slice(0, 8);  // Only top 8 to avoid clutter
-            
-            topPatterns.forEach(p => {
-                let pTime;
-                if(isDemo) {
-                    pTime = p.candle_timestamp;
-                } else {
-                    const ct = p.candle_timestamp || p.detected_at;
-                    if(!ct) return;
-                    const validCt = ct.replace(' ', 'T');
-                    pTime = Math.floor(new Date(validCt).getTime() / 1000);
-                }
-                if (isNaN(pTime)) return;
-
-                const hi = parseFloat(p.candle_high);
-                const lo = parseFloat(p.candle_low);
-                if(isNaN(hi) || isNaN(lo)) return;
-
-                // Calculate zone span: pattern candle time to +5 candles forward
-                const timeStep = currentTimeframe === '1H' ? 3600 : (currentTimeframe === '4H' ? 14400 : 86400);
-                const zoneEnd = pTime + timeStep * 5;
-
-                // Zone color by pattern
-                let zoneColor;
-                let label = p.pattern_type;
-                if(label === 'OrderBlock') { label = 'OB'; zoneColor = 'rgba(41,98,255,0.12)'; }
-                else if(label === 'FVG') { zoneColor = 'rgba(0,255,157,0.08)'; }
-                else if(label === 'CHoCH') { zoneColor = 'rgba(255,30,86,0.12)'; }
-                else if(label === 'BOS') { zoneColor = 'rgba(209,212,220,0.08)'; }
-                else { zoneColor = 'rgba(41,98,255,0.08)'; }
-
-                // Draw zone as two line series forming a band
-                try {
-                    const zoneTop = chart.addLineSeries({
-                        color: zoneColor.replace(/[\d.]+\)$/, '0.6)'),
-                        lineWidth: 1,
-                        lineStyle: LightweightCharts.LineStyle.Dotted,
-                        crosshairMarkerVisible: false,
-                        priceLineVisible: false,
-                        lastValueVisible: false,
-                    });
-                    zoneTop.setData([
-                        { time: pTime, value: hi },
-                        { time: zoneEnd, value: hi }
-                    ]);
-                    zoneSeries.push(zoneTop);
-
-                    const zoneBot = chart.addLineSeries({
-                        color: zoneColor.replace(/[\d.]+\)$/, '0.6)'),
-                        lineWidth: 1,
-                        lineStyle: LightweightCharts.LineStyle.Dotted,
-                        crosshairMarkerVisible: false,
-                        priceLineVisible: false,
-                        lastValueVisible: false,
-                    });
-                    zoneBot.setData([
-                        { time: pTime, value: lo },
-                        { time: zoneEnd, value: lo }
-                    ]);
-                    zoneSeries.push(zoneBot);
-                } catch(e) {}
-            });
-
-            // 4. Pattern Markers (limited to top 10 highest confidence, no spam)
-            const markerPatterns = [...patterns]
-                .sort((a,b) => parseFloat(b.confidence_score) - parseFloat(a.confidence_score))
-                .slice(0, 10);
-
-            const markers = [];
-            markerPatterns.forEach(p => {
-                let pTime;
-                if(isDemo) {
-                    pTime = p.candle_timestamp;
-                } else {
-                    const ct = p.candle_timestamp || p.detected_at;
-                    if(!ct) return;
-                    const validCt = ct.replace(' ', 'T');
-                    pTime = Math.floor(new Date(validCt).getTime() / 1000);
-                }
-                
-                if (isNaN(pTime)) return;
-                
-                let text = p.pattern_type;
-                if(text === 'OrderBlock') text = 'OB';
-                
-                let clr = '#2962FF';
-                if(text === 'BOS') clr = '#D1D4DC';
-                if(text === 'CHoCH') clr = '#FF1E56';
-                if(text === 'FVG') clr = '#00FF9D';
-                if(text === 'OB') clr = '#F7931A';
-
-                markers.push({
-                    time: pTime,
-                    position: 'aboveBar',
-                    color: clr,
-                    shape: 'arrowDown',
-                    text: text,
-                    size: 1
-                });
-            });
-            
-            markers.sort((a, b) => a.time - b.time);
-            
-            try {
-                candleSeries.setMarkers(markers);
-            } catch (e) {
-                console.error("Markers Error:", e);
-            }
-            
+        } else if (fit) {
             chart.timeScale().fitContent();
         }
+    }
 
-    </script>
-</body>
-</html>
+    async function fetchSignals() {
+        let signals = [];
+        try {
+            const r = await fetch(`/api/signals?pair=${currentPair}&limit=20`);
+            if (r.ok) signals = await r.json();
+            else throw 0;
+        } catch {
+            console.warn('[SMC] Failed to fetch signals for', currentPair);
+        }
+        renderSignals(signals);
+    }
+
+    function renderSignals(signals) {
+        const el = document.getElementById('signalsList');
+        if (!signals.length) return;
+
+        el.innerHTML = signals.map((s, i) => {
+            const isLong = s.direction === 'LONG';
+            const pipColor = isLong ? 'var(--green)' : 'var(--red)';
+            const badgeClass = isLong ? 'badge-buy' : 'badge-sell';
+            const conf = parseFloat(s.confidence || s.confidence_score || 0.80);
+
+            let statusBadge = '';
+            if (s.status === 'PENDING') statusBadge = '<span class="badge badge-pending">PENDING</span>';
+            else if (s.status === 'ACTIVE') statusBadge = '<span class="badge badge-active">ACTIVE</span>';
+            else if (s.status === 'HIT_TP') statusBadge = '<span class="badge badge-tp">TP HIT</span>';
+            else if (s.status === 'HIT_SL') statusBadge = '<span class="badge badge-sl">SL HIT</span>';
+            else statusBadge = `<span class="badge" style="color:var(--muted)">${s.status}</span>`;
+
+            let timeStr = '';
+            const tVal = s.candle_time || s.created_at;
+            if (tVal) {
+                const d = new Date(tVal.replace(' ', 'T') + (!tVal.includes('Z') ? 'Z' : ''));
+                const day = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                timeStr = `<div style="font-size:9px;color:var(--muted);margin-top:6px;">${day} &bull; ${time}</div>`;
+            }
+
+            return `
+            <div class="signal-card ${activeCardId === i ? 'active-signal' : ''}" id="sig-${i}">
+                <div class="direction-pip" style="background:${pipColor}"></div>
+                <div class="top-row">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="badge ${badgeClass}">${isLong ? 'BUY' : 'SELL'}</span>
+                        <span class="pattern-name">${s.pattern_type === 'OrderBlock' ? 'OB' : s.pattern_type}</span>
+                    </div>
+                    ${statusBadge}
+                </div>
+                <div class="prices">
+                    <div><div class="price-label">Entry</div><div class="price-val">${s.entry_price}</div></div>
+                    <div><div class="price-label">Stop Loss</div><div class="price-val sl">${s.stop_loss}</div></div>
+                    <div><div class="price-label">Take Profit</div><div class="price-val tp">${s.take_profit}</div></div>
+                </div>
+                <div class="bottom-row">
+                    <span class="conf">Conf: ${(conf*100).toFixed(0)}% &bull; R:R ${Number(s.rr_ratio).toFixed(1)}</span>
+                    <button class="btn-show" onclick="event.stopPropagation(); showSignalOnChart(${i}, ${parseFloat(s.entry_price)}, ${parseFloat(s.stop_loss)}, ${parseFloat(s.take_profit)}, '${s.direction}')">
+                        Show on Chart
+                    </button>
+                </div>
+                ${timeStr}
+            </div>`;
+        }).join('');
+
+        // Apply Chart Markers
+        if (candleSeries) {
+            const markers = [];
+            [...signals].forEach(s => {
+                const tVal = s.candle_time || s.created_at;
+                if (!tVal) return;
+                const t = Math.floor(new Date(tVal.replace(' ', 'T') + (!tVal.includes('Z') ? 'Z' : '')).getTime() / 1000);
+                if (isNaN(t)) return;
+                const isLong = s.direction === 'LONG';
+                markers.push({
+                    time: t,
+                    position: isLong ? 'belowBar' : 'aboveBar',
+                    color: isLong ? '#00FF9D' : '#FF1E56',
+                    shape: isLong ? 'arrowUp' : 'arrowDown',
+                    text: s.pattern_type === 'OrderBlock' ? 'OB' : s.pattern_type,
+                });
+            });
+
+            // Sort by time, then deduplicate (Lightweight Charts requirement)
+            markers.sort((a,b) => a.time - b.time);
+            const uniqueMarkers = [];
+            const seenTimes = new Set();
+            for(const m of markers) {
+                if(!seenTimes.has(m.time)) {
+                    uniqueMarkers.push(m);
+                    seenTimes.add(m.time);
+                }
+            }
+
+            // Add a special marker for the focused pattern if deep-linked
+            if (focusTime) {
+                const exists = uniqueMarkers.find(m => m.time === focusTime);
+                if (!exists) {
+                    uniqueMarkers.push({
+                        time: focusTime,
+                        position: 'aboveBar',
+                        color: '#FF1E56',
+                        shape: 'arrowDown',
+                        text: 'TARGET PATTERN'
+                    });
+                }
+                focusTime = null; // Clear it so it doesn't snap back later
+            }
+
+            candleSeries.setMarkers(uniqueMarkers);
+        }
+    }
+</script>
+{% endblock %}

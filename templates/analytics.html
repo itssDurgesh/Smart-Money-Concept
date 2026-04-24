@@ -1,0 +1,348 @@
+{% extends "_base.html" %}
+{% block title %}XGB-SMC Terminal — Analytics{% endblock %}
+
+{% block extra_css %}
+.analytics-page {
+    padding: 16px;
+    overflow-y: auto;
+    height: 100%;
+}
+.page-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 16px;
+}
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.stat-box {
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+}
+.stat-box .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+}
+.stat-box .val {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+}
+.stat-box .val.green { color: var(--green); }
+.stat-box .val.blue { color: var(--blue); }
+.stat-box .val.orange { color: var(--orange); }
+
+.charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.chart-box {
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 16px;
+    border: 1px solid var(--border);
+}
+.chart-box .title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.chart-box canvas { width: 100% !important; max-height: 260px; }
+
+.top-signals-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.top-signals-table th {
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 8px 12px;
+    text-align: left;
+}
+.top-signals-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+}
+{% endblock %}
+
+{% block content %}
+<div class="analytics-page">
+    <div class="page-title">Analytics Dashboard</div>
+
+    <!-- Stat Cards -->
+    <div class="stats-row">
+        <div class="stat-box">
+            <div class="label">Total Signals</div>
+            <div class="val" id="totalSignals">--</div>
+        </div>
+        <div class="stat-box">
+            <div class="label">Win Rate</div>
+            <div class="val green" id="winRate">--</div>
+        </div>
+        <div class="stat-box">
+            <div class="label">Avg Risk:Reward</div>
+            <div class="val blue" id="avgRR">--</div>
+        </div>
+        <div class="stat-box">
+            <div class="label">Best Pattern</div>
+            <div class="val orange" id="bestPattern">--</div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="charts-row">
+        <div class="chart-box">
+            <div class="title">Pattern Distribution</div>
+            <canvas id="patternChart"></canvas>
+        </div>
+        <div class="chart-box">
+            <div class="title">Signal Outcomes</div>
+            <canvas id="outcomeChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Confidence Trend + Top Signals -->
+    <div class="charts-row">
+        <div class="chart-box">
+            <div class="title">Confidence Trend</div>
+            <canvas id="confChart"></canvas>
+        </div>
+        <div class="chart-box">
+            <div class="title">Top 5 Signals by R:R</div>
+            <table class="top-signals-table">
+                <thead><tr><th>#</th><th>Pattern</th><th>Direction</th><th>R:R</th><th>Status</th></tr></thead>
+                <tbody id="topSignals">
+                    <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:30px;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Advanced Analytics Row -->
+    <div class="charts-row">
+        <div class="chart-box">
+            <div class="title">Equity Curve Simulator ($1k Risk/Trade)</div>
+            <canvas id="equityChart"></canvas>
+        </div>
+        <div class="chart-box">
+            <div class="title">Win Rate by Timeframe</div>
+            <canvas id="timeframeChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    Chart.defaults.color = '#787B86';
+    Chart.defaults.borderColor = 'rgba(67,70,86,0.25)';
+    Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+    Chart.defaults.font.size = 11;
+
+    document.addEventListener('DOMContentLoaded', loadAnalytics);
+
+    async function loadAnalytics() {
+        let signals = [], patterns = [];
+
+        try {
+            const [sr, pr] = await Promise.all([
+                fetch('/api/signals?limit=5000'),
+                fetch('/api/patterns?limit=5000')
+            ]);
+            if (sr.ok) signals = await sr.json();
+            if (pr.ok) patterns = await pr.json();
+        } catch {}
+
+        // If no data from API, show empty state
+        if (!signals.length) {
+            console.warn('[SMC] No signals data available for analytics');
+        }
+        if (!patterns.length) {
+            console.warn('[SMC] No patterns data available for analytics');
+        }
+
+        // Stats
+        const tp = signals.filter(s => s.status === 'HIT_TP').length;
+        const sl = signals.filter(s => s.status === 'HIT_SL').length;
+        const wr = (tp + sl) > 0 ? ((tp / (tp + sl)) * 100).toFixed(1) : '0.0';
+        const avgRR = signals.length ? (signals.reduce((a, s) => a + parseFloat(s.rr_ratio || 0), 0) / signals.length).toFixed(2) : '0.00';
+
+        // Best pattern by win rate
+        const patternWins = {};
+        signals.forEach(s => {
+            const p = s.pattern_type;
+            if (!patternWins[p]) patternWins[p] = { tp: 0, total: 0 };
+            if (s.status === 'HIT_TP' || s.status === 'HIT_SL') {
+                patternWins[p].total++;
+                if (s.status === 'HIT_TP') patternWins[p].tp++;
+            }
+        });
+        let best = '--';
+        let bestRate = 0;
+        for (const [p, v] of Object.entries(patternWins)) {
+            if (v.total > 0 && v.tp / v.total > bestRate) { bestRate = v.tp / v.total; best = p === 'OrderBlock' ? 'OB' : p; }
+        }
+
+        document.getElementById('totalSignals').innerText = signals.length;
+        document.getElementById('winRate').innerText = wr + '%';
+        document.getElementById('avgRR').innerText = avgRR;
+        document.getElementById('bestPattern').innerText = best;
+
+        // Pattern Distribution
+        const patDist = { FVG: 0, BOS: 0, CHoCH: 0, OrderBlock: 0 };
+        patterns.forEach(p => { if (patDist.hasOwnProperty(p.pattern_type)) patDist[p.pattern_type]++; });
+
+        new Chart(document.getElementById('patternChart'), {
+            type: 'bar',
+            data: {
+                labels: ['FVG', 'BOS', 'CHoCH', 'OB'],
+                datasets: [{
+                    data: [patDist.FVG, patDist.BOS, patDist.CHoCH, patDist.OrderBlock],
+                    backgroundColor: ['#00FF9D', '#D1D4DC', '#FF1E56', '#F7931A'],
+                    borderRadius: 3,
+                    barPercentage: 0.5,
+                }]
+            },
+            options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(67,70,86,0.15)' } }, x: { grid: { display: false } } } }
+        });
+
+        // Signal Outcomes Donut
+        const outcomes = { PENDING: 0, ACTIVE: 0, HIT_TP: 0, HIT_SL: 0 };
+        signals.forEach(s => { if (outcomes.hasOwnProperty(s.status)) outcomes[s.status]++; });
+
+        new Chart(document.getElementById('outcomeChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Pending', 'Active', 'TP Hit', 'SL Hit'],
+                datasets: [{
+                    data: [outcomes.PENDING, outcomes.ACTIVE, outcomes.HIT_TP, outcomes.HIT_SL],
+                    backgroundColor: ['#F59E0B', '#2962FF', '#00FF9D', '#FF1E56'],
+                    borderWidth: 0,
+                    hoverOffset: 6,
+                }]
+            },
+            options: { cutout: '65%', plugins: { legend: { position: 'bottom', labels: { padding: 14, boxWidth: 10, font: { size: 10 } } } } }
+        });
+
+        // Confidence Trend
+        const confData = patterns.slice(0, 30).map((p, i) => parseFloat(p.confidence_score) * 100);
+        new Chart(document.getElementById('confChart'), {
+            type: 'line',
+            data: {
+                labels: confData.map((_, i) => i + 1),
+                datasets: [{
+                    data: confData,
+                    borderColor: '#2962FF',
+                    backgroundColor: 'rgba(41,98,255,0.08)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 2,
+                    pointBackgroundColor: '#2962FF',
+                    borderWidth: 2,
+                }]
+            },
+            options: { plugins: { legend: { display: false } }, scales: { y: { min: 50, max: 100, grid: { color: 'rgba(67,70,86,0.15)' } }, x: { grid: { display: false }, ticks: { display: false } } } }
+        });
+
+        // Top 5 Signals
+        const sorted = [...signals].sort((a, b) => parseFloat(b.rr_ratio) - parseFloat(a.rr_ratio)).slice(0, 5);
+        document.getElementById('topSignals').innerHTML = sorted.map((s, i) => {
+            const dir = s.direction === 'LONG' ? '<span class="badge badge-buy">BUY</span>' : '<span class="badge badge-sell">SELL</span>';
+            let st = s.status;
+            if (st === 'HIT_TP') st = '<span style="color:var(--green)">TP</span>';
+            else if (st === 'HIT_SL') st = '<span style="color:var(--red)">SL</span>';
+            else if (st === 'PENDING') st = '<span style="color:#F59E0B">PEND</span>';
+            else if (st === 'ACTIVE') st = '<span style="color:var(--blue)">ACTV</span>';
+            return `<tr>
+                <td style="color:var(--muted)">${i+1}</td>
+                <td style="color:#fff">${s.pattern_type === 'OrderBlock' ? 'OB' : s.pattern_type}</td>
+                <td>${dir}</td>
+                <td style="color:var(--blue);font-weight:700">${Number(s.rr_ratio).toFixed(1)}</td>
+                <td>${st}</td>
+            </tr>`;
+        }).join('');
+
+        // Equity Curve Simulator
+        let balance = 10000;
+        const equityData = [10000];
+        const chronoSignals = [...signals].reverse();
+        chronoSignals.forEach(s => {
+            if (s.status === 'HIT_TP') {
+                balance += 1000 * parseFloat(s.rr_ratio || 2.0);
+                equityData.push(balance);
+            } else if (s.status === 'HIT_SL') {
+                balance -= 1000;
+                equityData.push(balance);
+            }
+        });
+        
+        new Chart(document.getElementById('equityChart'), {
+            type: 'line',
+            data: {
+                labels: Array.from({length: equityData.length}, (_, i) => i),
+                datasets: [{
+                    data: equityData,
+                    borderColor: '#00FF9D',
+                    backgroundColor: 'rgba(0,255,157,0.08)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    stepped: true
+                }]
+            },
+            options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(67,70,86,0.15)' } }, x: { grid: { display: false }, ticks: { display: false } } } }
+        });
+
+        // Timeframe Performance
+        const tfStats = { '15M': {tp:0, total:0}, '1H': {tp:0, total:0}, '4H': {tp:0, total:0}, '1D': {tp:0, total:0} };
+        signals.forEach(s => {
+            const tf = s.timeframe || '1H';
+            if (!tfStats[tf]) tfStats[tf] = {tp:0, total:0};
+            if (s.status === 'HIT_TP' || s.status === 'HIT_SL') {
+                tfStats[tf].total++;
+                if (s.status === 'HIT_TP') tfStats[tf].tp++;
+            }
+        });
+        const tfLabels = ['15M', '1H', '4H', '1D'];
+        const tfRates = tfLabels.map(t => tfStats[t] && tfStats[t].total > 0 ? (tfStats[t].tp / tfStats[t].total) * 100 : 0);
+        
+        new Chart(document.getElementById('timeframeChart'), {
+            type: 'bar',
+            data: {
+                labels: tfLabels,
+                datasets: [{
+                    data: tfRates,
+                    backgroundColor: '#2962FF',
+                    borderRadius: 3,
+                    barPercentage: 0.5,
+                }]
+            },
+            options: { plugins: { legend: { display: false } }, scales: { y: { max: 100, beginAtZero: true, grid: { color: 'rgba(67,70,86,0.15)' } }, x: { grid: { display: false } } } }
+        });
+    }
+</script>
+{% endblock %}

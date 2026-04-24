@@ -1,0 +1,187 @@
+{% extends "_base.html" %}
+{% block title %}XGB-SMC Terminal — Signals{% endblock %}
+
+{% block extra_css %}
+.signals-page {
+    padding: 16px;
+    overflow-y: auto;
+    height: 100%;
+}
+.page-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 16px;
+}
+.filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+.filters select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: #fff;
+    padding: 6px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+    outline: none;
+}
+.filters select:focus { border-color: var(--blue); }
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.data-table th {
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.data-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+}
+.data-table tr:hover { background: var(--surface-2); }
+.data-table .text-right { text-align: right; }
+.empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 60px 0;
+    font-size: 13px;
+}
+{% endblock %}
+
+{% block content %}
+<div class="signals-page">
+    <div class="page-title">Trade Signals</div>
+    <div class="filters">
+        <select id="filterPair">
+            <option value="">All Pairs</option>
+            <option value="EURUSD">EURUSD</option>
+            <option value="XAUUSD">XAUUSD</option>
+            <option value="GBPUSD">GBPUSD</option>
+        </select>
+        <select id="filterStatus">
+            <option value="">All Status</option>
+            <option value="PENDING">Pending</option>
+            <option value="ACTIVE">Active</option>
+            <option value="HIT_TP">Hit TP</option>
+            <option value="HIT_SL">Hit SL</option>
+        </select>
+        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:6px 12px; border-radius:4px;">
+            <span style="color:#fff; font-size:11px; font-family:var(--mono);">Min Confidence:</span>
+            <input type="range" id="filterConfidence" min="70" max="100" value="70" style="width:80px; accent-color:var(--blue); cursor:pointer;">
+            <span id="confLabel" style="color:var(--blue); font-size:11px; font-family:var(--mono); font-weight:700;">70%</span>
+        </div>
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Pair</th>
+                <th>TF</th>
+                <th>Direction</th>
+                <th>Pattern</th>
+                <th>Entry</th>
+                <th>Stop Loss</th>
+                <th>Take Profit</th>
+                <th>R:R</th>
+                <th>Confidence</th>
+                <th>Status</th>
+                <th>Candle Time</th>
+            </tr>
+        </thead>
+        <tbody id="signalsBody">
+            <tr><td colspan="12" class="empty-state">Loading signals...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allSignals = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSignals();
+        document.getElementById('filterPair').addEventListener('change', renderTable);
+        document.getElementById('filterStatus').addEventListener('change', renderTable);
+        document.getElementById('filterConfidence').addEventListener('input', (e) => {
+            document.getElementById('confLabel').innerText = e.target.value + '%';
+            renderTable();
+        });
+    });
+
+    async function loadSignals() {
+        try {
+            const r = await fetch('/api/signals');
+            if (r.ok) allSignals = await r.json();
+            else throw 0;
+        } catch {
+            console.warn('[SMC] Failed to fetch signals data');
+            allSignals = [];
+        }
+        renderTable();
+    }
+
+    function renderTable() {
+        const pair = document.getElementById('filterPair').value;
+        const status = document.getElementById('filterStatus').value;
+        const minConf = parseInt(document.getElementById('filterConfidence').value) / 100.0;
+
+        let filtered = allSignals;
+        if (pair) filtered = filtered.filter(s => s.pair === pair);
+        if (status) filtered = filtered.filter(s => s.status === status);
+        filtered = filtered.filter(s => parseFloat(s.confidence || s.confidence_score || 0) >= minConf);
+
+        const tbody = document.getElementById('signalsBody');
+        if (!filtered.length) {
+            tbody.innerHTML = '<tr><td colspan="12" class="empty-state">No signals match filters.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = filtered.map((s, i) => {
+            const isLong = s.direction === 'LONG';
+            const dirBadge = isLong ? '<span class="badge badge-buy">BUY</span>' : '<span class="badge badge-sell">SELL</span>';
+            let statusBadge = '';
+            if (s.status === 'PENDING') statusBadge = '<span class="badge badge-pending">PENDING</span>';
+            else if (s.status === 'ACTIVE') statusBadge = '<span class="badge badge-active">ACTIVE</span>';
+            else if (s.status === 'HIT_TP') statusBadge = '<span class="badge badge-tp">TP</span>';
+            else if (s.status === 'HIT_SL') statusBadge = '<span class="badge badge-sl">SL</span>';
+            else statusBadge = s.status;
+
+            const conf = parseFloat(s.confidence || s.confidence_score || 0);
+            const candleTime = (s.candle_time || s.created_at || '').replace('T', ' ').substring(0, 16);
+
+            return `<tr>
+                <td style="color:var(--muted)">${i+1}</td>
+                <td style="color:#fff;font-weight:600">${s.pair || '--'}</td>
+                <td style="color:var(--muted)">${s.timeframe || '1H'}</td>
+                <td>${dirBadge}</td>
+                <td style="color:#fff;font-weight:600">${s.pattern_type === 'OrderBlock' ? 'OB' : s.pattern_type}</td>
+                <td>${s.entry_price}</td>
+                <td style="color:var(--red)">${s.stop_loss}</td>
+                <td style="color:var(--green)">${s.take_profit}</td>
+                <td style="color:var(--blue)">${Number(s.rr_ratio).toFixed(1)}</td>
+                <td>${(conf*100).toFixed(0)}%</td>
+                <td>${statusBadge}</td>
+                <td style="color:var(--muted)">${candleTime}</td>
+            </tr>`;
+        }).join('');
+    }
+</script>
+{% endblock %}

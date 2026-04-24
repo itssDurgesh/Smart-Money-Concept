@@ -10,16 +10,18 @@ Routes:
     /api/signals        — GET trade signals (JSON)
     /api/stats          — GET summary statistics (JSON)
     /api/pairs          — GET available pairs (JSON)
+    /api/sync           — POST run ingestion/detection pipeline
 
 Usage:
     uvicorn app:app --host 0.0.0.0 --port 5000 --reload
 """
 
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Request, Query, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from typing import Optional, List
+import subprocess
 
 from config import engine, API_HOST, API_PORT, API_DEBUG
 
@@ -45,8 +47,26 @@ def query_to_dict(sql: str, params: dict = None) -> list[dict]:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    """Serve the main dashboard page."""
-    return templates.TemplateResponse(request, "dashboard.html")
+    """Serve the main chart page."""
+    return templates.TemplateResponse(request, "dashboard.html", {"active_page": "chart"})
+
+
+@app.get("/signals", response_class=HTMLResponse)
+async def signals_page(request: Request):
+    """Serve the signals table page."""
+    return templates.TemplateResponse(request, "signals.html", {"active_page": "signals"})
+
+
+@app.get("/patterns", response_class=HTMLResponse)
+async def patterns_page(request: Request):
+    """Serve the patterns table page."""
+    return templates.TemplateResponse(request, "patterns.html", {"active_page": "patterns"})
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+async def analytics_page(request: Request):
+    """Serve the analytics dashboard page."""
+    return templates.TemplateResponse(request, "analytics.html", {"active_page": "analytics"})
 
 
 # ============================================================
@@ -64,10 +84,10 @@ async def api_pairs():
 async def api_candles(
     pair: str = Query("EURUSD", description="Currency pair"),
     timeframe: str = Query("1H", description="Timeframe"),
-    limit: int = Query(200, description="Number of candles")
+    limit: Optional[int] = Query(None, description="Number of candles (optional)")
 ):
     """Get candle data for charting."""
-    rows = query_to_dict("""
+    query = """
         SELECT id, pair, timeframe, 
                CAST(open AS CHAR) as open, 
                CAST(high AS CHAR) as high, 
@@ -77,8 +97,14 @@ async def api_candles(
         FROM candles
         WHERE pair = :pair AND timeframe = :timeframe
         ORDER BY timestamp DESC
-        LIMIT :limit
-    """, {"pair": pair, "timeframe": timeframe, "limit": limit})
+    """
+    params = {"pair": pair, "timeframe": timeframe}
+
+    if limit is not None:
+        query += " LIMIT :limit"
+        params["limit"] = limit
+
+    rows = query_to_dict(query, params)
 
     # Reverse to chronological order for chart
     rows.reverse()
@@ -95,7 +121,8 @@ async def api_patterns(
     pair: Optional[str] = None,
     timeframe: Optional[str] = None,
     min_confidence: float = Query(0.7, description="Minimum confidence score"),
-    limit: int = Query(100, description="Max limit")
+    months: int = Query(12, description="Months of history to fetch"),
+    limit: int = Query(5000, description="Max limit")
 ):
     """Get detected patterns with candle info."""
     query = """
@@ -110,8 +137,9 @@ async def api_patterns(
         FROM patterns p
         JOIN candles c ON p.candle_id = c.id
         WHERE p.confidence_score >= :min_conf
+          AND c.timestamp >= DATE_SUB(NOW(), INTERVAL :months MONTH)
     """
-    params = {"min_conf": min_confidence, "limit": limit}
+    params = {"min_conf": min_confidence, "limit": limit, "months": months}
 
     if pair:
         query += " AND c.pair = :pair"
@@ -134,7 +162,8 @@ async def api_patterns(
 async def api_signals(
     pair: Optional[str] = None,
     status: Optional[str] = None,
-    limit: int = Query(50, description="Max limit")
+    months: int = Query(3, description="Months of history to fetch"),
+    limit: int = Query(1000, description="Max limit")
 ):
     """Get trade signals with pattern and candle info."""
     query = """
@@ -146,13 +175,13 @@ async def api_signals(
                s.status, s.created_at,
                p.pattern_type, 
                CAST(p.confidence_score AS CHAR) as confidence,
-               c.pair, c.timeframe
+               c.pair, c.timeframe, c.timestamp as candle_time
         FROM signals s
         JOIN patterns p ON s.pattern_id = p.id
         JOIN candles c ON p.candle_id = c.id
-        WHERE 1=1
+        WHERE c.timestamp >= DATE_SUB(NOW(), INTERVAL :months MONTH)
     """
-    params = {"limit": limit}
+    params = {"limit": limit, "months": months}
 
     if pair:
         query += " AND c.pair = :pair"
@@ -161,11 +190,12 @@ async def api_signals(
         query += " AND s.status = :status"
         params["status"] = status
 
-    query += " ORDER BY s.created_at DESC LIMIT :limit"
+    query += " ORDER BY c.timestamp DESC LIMIT :limit"
 
     rows = query_to_dict(query, params)
     for r in rows:
         r["created_at"] = str(r["created_at"]) if r["created_at"] else ""
+        r["candle_time"] = str(r["candle_time"]) if "candle_time" in r and r["candle_time"] else ""
 
     return rows
 
@@ -199,6 +229,10 @@ async def api_stats():
     """)
     stats["pattern_distribution"] = {r["pattern_type"]: r["count"] for r in rows}
 
+    # Average confidence
+    rows = query_to_dict("SELECT AVG(confidence_score) as avg_conf FROM patterns WHERE confidence_score >= 0.70")
+    stats["avg_confidence"] = round(float(rows[0]["avg_conf"]), 4) if rows and rows[0]["avg_conf"] else 0
+
     # Win rate (from trade_log)
     rows = query_to_dict("""
         SELECT 
@@ -214,6 +248,20 @@ async def api_stats():
         stats["win_rate"] = 0
 
     return stats
+
+def run_sync_pipeline():
+    try:
+        subprocess.run(["python", "ingest.py", "--all"], check=True)
+        subprocess.run(["python", "detect.py", "--all"], check=True)
+        subprocess.run(["python", "signals.py"], check=True)
+    except Exception as e:
+        print(f"Sync pipeline failed: {e}")
+
+@app.post("/api/sync")
+async def api_sync(background_tasks: BackgroundTasks):
+    """Run the ingestion and ML detection pipeline in the background."""
+    background_tasks.add_task(run_sync_pipeline)
+    return {"status": "success", "message": "Background sync started"}
 
 
 if __name__ == "__main__":

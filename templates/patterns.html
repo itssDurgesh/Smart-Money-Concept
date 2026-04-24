@@ -1,0 +1,200 @@
+{% extends "_base.html" %}
+{% block title %}XGB-SMC Terminal — Patterns{% endblock %}
+
+{% block extra_css %}
+.patterns-page {
+    padding: 16px;
+    overflow-y: auto;
+    height: 100%;
+}
+.page-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 16px;
+}
+.filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+.filters select, .filters input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: #fff;
+    padding: 6px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+    outline: none;
+}
+.filters input[type="range"] { cursor: pointer; width: 140px; }
+.filters label { font-size: 11px; color: var(--muted); }
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.data-table th {
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.data-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+}
+.data-table tr:hover { background: var(--surface-2); }
+.conf-bar {
+    width: 60px;
+    height: 4px;
+    background: var(--surface-3);
+    border-radius: 2px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+.conf-fill {
+    height: 100%;
+    border-radius: 2px;
+}
+.pattern-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 3px;
+    font-family: var(--mono);
+}
+.pattern-badge.fvg { background: rgba(0,255,157,0.1); color: var(--green); }
+.pattern-badge.bos { background: rgba(209,212,220,0.1); color: #D1D4DC; }
+.pattern-badge.choch { background: rgba(255,30,86,0.1); color: var(--red); }
+.pattern-badge.ob { background: rgba(247,147,26,0.1); color: var(--orange); }
+.btn-view {
+    background: rgba(41, 98, 255, 0.15);
+    color: var(--blue);
+    padding: 4px 10px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 10px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    font-weight: 700;
+    transition: all 0.2s;
+    border: 1px solid rgba(41, 98, 255, 0.3);
+}
+.btn-view:hover { background: var(--blue); color: #fff; }
+{% endblock %}
+
+{% block content %}
+<div class="patterns-page">
+    <div class="page-title">Raw ML Classifications</div>
+    <div class="filters">
+        <select id="filterType">
+            <option value="">All Types</option>
+            <option value="FVG">FVG</option>
+            <option value="BOS">BOS</option>
+            <option value="CHoCH">CHoCH</option>
+            <option value="OrderBlock">OrderBlock</option>
+        </select>
+        <label>Min Confidence: <span id="confValue">70%</span></label>
+        <input type="range" id="confSlider" min="50" max="99" value="70" step="1">
+    </div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Time</th>
+                <th>Pair</th>
+                <th>Timeframe</th>
+                <th>Pattern</th>
+                <th>Confidence</th>
+                <th>Confirmed</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="patternsBody">
+            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:60px 0;">Loading patterns...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allPatterns = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadPatterns();
+        document.getElementById('filterType').addEventListener('change', renderTable);
+        const slider = document.getElementById('confSlider');
+        slider.addEventListener('input', () => {
+            document.getElementById('confValue').innerText = slider.value + '%';
+            renderTable();
+        });
+    });
+
+    async function loadPatterns() {
+        try {
+            const r = await fetch('/api/patterns?min_confidence=0.5');
+            if (r.ok) allPatterns = await r.json();
+            else throw 0;
+        } catch {
+            console.warn('[SMC] Failed to fetch patterns data');
+            allPatterns = [];
+        }
+        renderTable();
+    }
+
+    function renderTable() {
+        const type = document.getElementById('filterType').value;
+        const minConf = parseInt(document.getElementById('confSlider').value) / 100;
+        let filtered = allPatterns.filter(p => parseFloat(p.confidence_score) >= minConf);
+        if (type) filtered = filtered.filter(p => p.pattern_type === type);
+
+        const tbody = document.getElementById('patternsBody');
+        if (!filtered.length) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:60px 0;">No patterns match filters.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = filtered.map((p, i) => {
+            const conf = parseFloat(p.confidence_score);
+            const confPct = (conf * 100).toFixed(1);
+            const confColor = conf > 0.9 ? 'var(--green)' : (conf > 0.8 ? 'var(--blue)' : (conf > 0.7 ? '#F59E0B' : 'var(--muted)'));
+
+            let pType = p.pattern_type;
+            let badgeClass = pType.toLowerCase();
+            if (pType === 'OrderBlock') { pType = 'OB'; badgeClass = 'ob'; }
+
+            const time = (p.candle_timestamp || '').replace('T', ' ').substring(0, 16);
+
+            return `<tr>
+                <td style="color:var(--muted)">${i+1}</td>
+                <td style="color:var(--muted)">${time}</td>
+                <td style="color:#fff">${p.pair || 'EURUSD'}</td>
+                <td>${p.timeframe || '1H'}</td>
+                <td><span class="pattern-badge ${badgeClass}">${pType}</span></td>
+                <td>
+                    <span style="color:${confColor}">${confPct}%</span>
+                    <div class="conf-bar"><div class="conf-fill" style="width:${confPct}%;background:${confColor}"></div></div>
+                </td>
+                <td>${p.confirmed ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--muted)">No</span>'}</td>
+                <td><a href="/?pair=${p.pair || 'EURUSD'}&tf=${p.timeframe || '1H'}&focus=${new Date((p.candle_timestamp || '').replace(' ', 'T') + 'Z').getTime() / 1000}" class="btn-view">View</a></td>
+            </tr>`;
+        }).join('');
+    }
+</script>
+{% endblock %}
