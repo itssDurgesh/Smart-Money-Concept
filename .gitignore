@@ -1,5 +1,4 @@
 # Environment
-.env
 xgb_smc.pkl
 # Python
 __pycache__/
